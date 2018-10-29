@@ -14,7 +14,6 @@ import java.util.function.Consumer;
  */
 public abstract class AbstractListenerObservable<LISTENER, MODEL, VALUE> implements ObservableOnSubscribe<VALUE>
 {
-  private final CompositeDisposable compositeDisposable = new CompositeDisposable();
   private MODEL listenableValue;
 
   public AbstractListenerObservable(@NotNull MODEL pListenableValue)
@@ -27,8 +26,7 @@ public abstract class AbstractListenerObservable<LISTENER, MODEL, VALUE> impleme
   {
     LISTENER listener = registerListener(listenableValue, emitter::onNext);
     _Disposable disposable = new _Disposable(listener);
-    compositeDisposable.add(disposable);
-    emitter.setDisposable(compositeDisposable);
+    emitter.setDisposable(disposable);
   }
 
   /**
@@ -69,11 +67,6 @@ public abstract class AbstractListenerObservable<LISTENER, MODEL, VALUE> impleme
       {
         removeListener(listenableValue, listener);
         listener = null;
-
-        synchronized (compositeDisposable)
-        {
-          compositeDisposable.remove(this);
-        }
       }
     }
 
