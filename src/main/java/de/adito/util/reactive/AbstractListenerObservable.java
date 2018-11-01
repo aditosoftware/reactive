@@ -36,7 +36,7 @@ public abstract class AbstractListenerObservable<LISTENER, MODEL, VALUE> impleme
    * @return the strong listener, not <tt>null</tt>
    */
   @NotNull
-  protected abstract LISTENER registerListener(@NotNull MODEL pListenableValue, @NotNull IFireable pFireable);
+  protected abstract LISTENER registerListener(@NotNull MODEL pListenableValue, @NotNull IFireable<VALUE> pFireable);
 
   /**
    * Removes the listener, that was added by registerListener, from VALUE

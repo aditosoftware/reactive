@@ -164,7 +164,7 @@ public class Test_AbstractListenerObservable
 
     @NotNull
     @Override
-    protected PropertyChangeListener registerListener(@NotNull Object pListenableValue, @NotNull IFireable pFireable)
+    protected PropertyChangeListener registerListener(@NotNull Object pListenableValue, @NotNull IFireable<String> pFireable)
     {
       PropertyChangeListener pc = evt -> {
         if(Objects.equals(evt.getPropertyName(), "close"))
