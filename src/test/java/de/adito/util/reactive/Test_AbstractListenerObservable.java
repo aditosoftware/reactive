@@ -9,7 +9,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.*;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.beans.PropertyChangeListener;
+import java.beans.*;
 import java.util.*;
 
 import static org.mockito.ArgumentMatchers.any;
@@ -49,7 +49,7 @@ public class Test_AbstractListenerObservable
   {
     Consumer<String> subscriber = mock(Consumer.class);
     observable.subscribe(subscriber);
-    listenerObservable.pcl.forEach(pL -> pL.propertyChange(null));
+    listenerObservable._fire();
     verify(subscriber, times(1)).accept(any());
   }
 
@@ -134,6 +134,22 @@ public class Test_AbstractListenerObservable
     verify(listenerObservable, times(3)).removeListener(any(), any());
   }
 
+  @Test
+  void test_removeListenerAfterCompletion()
+  {
+    Disposable disp = observable.subscribe();
+
+    // Fire some changes
+    listenerObservable._fire("one");
+    listenerObservable._fire("two");
+    verify(listenerObservable, times(0)).removeListener(any(), any());
+
+    // Fire closing event
+    listenerObservable._fire("close");
+    Assertions.assertTrue(disp.isDisposed());
+    verify(listenerObservable, times(1)).removeListener(any(), any());
+  }
+
   /**
    * AbstractListenerObservable-Impl
    */
@@ -148,9 +164,14 @@ public class Test_AbstractListenerObservable
 
     @NotNull
     @Override
-    protected PropertyChangeListener registerListener(@NotNull Object pListenableValue, @NotNull java.util.function.Consumer<String> pOnNext)
+    protected PropertyChangeListener registerListener(@NotNull Object pListenableValue, @NotNull IFireable pFireable)
     {
-      PropertyChangeListener pc = evt -> pOnNext.accept("[new value]");
+      PropertyChangeListener pc = evt -> {
+        if(Objects.equals(evt.getPropertyName(), "close"))
+          pFireable.fireCompleted();
+        else
+          pFireable.fireValueChanged("[new value]");
+      };
       pcl.add(pc);
       return pc;
     }
@@ -163,7 +184,12 @@ public class Test_AbstractListenerObservable
 
     private void _fire()
     {
-      pcl.forEach(pL -> pL.propertyChange(null));
+      _fire("");
+    }
+
+    private void _fire(String pProp)
+    {
+      pcl.forEach(pL -> pL.propertyChange(new PropertyChangeEvent(this, pProp, null, null)));
     }
   }
 

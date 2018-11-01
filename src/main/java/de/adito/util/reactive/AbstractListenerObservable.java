@@ -4,8 +4,6 @@ import io.reactivex.*;
 import io.reactivex.disposables.*;
 import org.jetbrains.annotations.NotNull;
 
-import java.util.function.Consumer;
-
 /**
  * Abstract implementation of an RxJava Observable.
  * This abstraction connects the normal listeners with the reactive programming paradigm.
@@ -24,7 +22,7 @@ public abstract class AbstractListenerObservable<LISTENER, MODEL, VALUE> impleme
   @Override
   public final void subscribe(ObservableEmitter<VALUE> emitter)
   {
-    LISTENER listener = registerListener(listenableValue, emitter::onNext);
+    LISTENER listener = registerListener(listenableValue, new _EmitterFireable<>(emitter));
     _Disposable disposable = new _Disposable(listener);
     emitter.setDisposable(disposable);
   }
@@ -34,11 +32,11 @@ public abstract class AbstractListenerObservable<LISTENER, MODEL, VALUE> impleme
    * If the value is changed / the listener is activated pOnNext has to be called
    *
    * @param pListenableValue Value that we're listening to
-   * @param pOnNext          onNext function of the emitter to fire a new value
+   * @param pFireable        Interface to publish new values
    * @return the strong listener, not <tt>null</tt>
    */
   @NotNull
-  protected abstract LISTENER registerListener(@NotNull MODEL pListenableValue, @NotNull Consumer<VALUE> pOnNext);
+  protected abstract LISTENER registerListener(@NotNull MODEL pListenableValue, @NotNull IFireable pFireable);
 
   /**
    * Removes the listener, that was added by registerListener, from VALUE
@@ -47,6 +45,62 @@ public abstract class AbstractListenerObservable<LISTENER, MODEL, VALUE> impleme
    * @param pLISTENER        Listener, that is to be removed
    */
   protected abstract void removeListener(@NotNull MODEL pListenableValue, @NotNull LISTENER pLISTENER);
+
+  /**
+   * Interface to publish new values or completion
+   */
+  public interface IFireable<VALUE>
+  {
+    /**
+     * Fire that the value of this Observable has changed
+     *
+     * @param pNewValue new value, not <tt>null</tt>
+     */
+    void fireValueChanged(@NotNull VALUE pNewValue);
+
+    /**
+     * Fires, that the listener failed execution
+     *
+     * @param pError Failure
+     */
+    void fireListenerFailure(@NotNull Throwable pError);
+
+    /**
+     * Fires, that the observable completed and won't fire any more value changes
+     */
+    void fireCompleted();
+  }
+
+  /**
+   * Fireable-Wrapper for an ObservableEmitter
+   */
+  private static class _EmitterFireable<VALUE> implements IFireable<VALUE>
+  {
+    private final Emitter<VALUE> emitter;
+
+    public _EmitterFireable(@NotNull Emitter<VALUE> pEmitter)
+    {
+      emitter = pEmitter;
+    }
+
+    @Override
+    public void fireValueChanged(@NotNull VALUE pNewValue)
+    {
+      emitter.onNext(pNewValue);
+    }
+
+    @Override
+    public void fireListenerFailure(@NotNull Throwable pError)
+    {
+      emitter.onError(pError);
+    }
+
+    @Override
+    public void fireCompleted()
+    {
+      emitter.onComplete();
+    }
+  }
 
   /**
    * Disposable-Impl, that keeps the listener
