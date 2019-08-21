@@ -1,7 +1,7 @@
 package de.adito.util.reactive.cache;
 
 import io.reactivex.Observable;
-import io.reactivex.subjects.*;
+import io.reactivex.disposables.CompositeDisposable;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.*;
@@ -16,7 +16,8 @@ import java.util.function.Supplier;
 public class ObservableCache
 {
 
-  private final Map<Object, Subject<?>> cache = new ConcurrentHashMap<>();
+  private final Map<Object, Observable<?>> cache = new ConcurrentHashMap<>();
+  private final CompositeDisposable compositeDisposable = new CompositeDisposable();
 
   /**
    * Creates a new Entry in our Observable Cache.
@@ -32,22 +33,22 @@ public class ObservableCache
   {
     //noinspection unchecked We do not have a method to check generic-validity
     return (Observable<T>) cache.computeIfAbsent(pIdentifier, pID -> pObservable.get()
-        .share()
-        .subscribeWith(ReplaySubject.createWithSize(1)));
+        .replay(1)
+        .autoConnect(0, compositeDisposable::add));
   }
 
   /**
-   * Completes all Subjects and clears the underlying cache
+   * Disposes all Subjects and clears the underlying cache
    */
   public void invalidate()
   {
     Exception ex = null;
-    Set<Map.Entry<Object, Subject<?>>> entries = new HashSet<>(cache.entrySet());
-    for (Map.Entry<Object, Subject<?>> entry : entries)
+    Set<Map.Entry<Object, Observable<?>>> entries = new HashSet<>(cache.entrySet());
+    for (Map.Entry<Object, Observable<?>> entry : entries)
     {
       try
       {
-        entry.getValue().onComplete();
+        compositeDisposable.clear();
       }
       catch(Exception e)
       {
