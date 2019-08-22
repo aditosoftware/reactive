@@ -29,7 +29,7 @@ public class ObservableCache
    * @return the cached observable
    */
   @NotNull
-  public <T> Observable<T> calculate(@NotNull Object pIdentifier, @NotNull Supplier<Observable<T>> pObservable)
+  public synchronized <T> Observable<T> calculate(@NotNull Object pIdentifier, @NotNull Supplier<Observable<T>> pObservable)
   {
     //noinspection unchecked We do not have a method to check generic-validity
     return (Observable<T>) cache.computeIfAbsent(pIdentifier, pID -> pObservable.get()
@@ -40,27 +40,27 @@ public class ObservableCache
   /**
    * Disposes all Subjects and clears the underlying cache
    */
-  public void invalidate()
+  public synchronized void invalidate()
   {
     Exception ex = null;
-    Set<Map.Entry<Object, Observable<?>>> entries = new HashSet<>(cache.entrySet());
-    for (Map.Entry<Object, Observable<?>> entry : entries)
+    try
     {
-      try
-      {
-        compositeDisposable.clear();
-      }
-      catch(Exception e)
-      {
-        ex = e;
-      }
-      finally
+      compositeDisposable.clear();
+    }
+    catch (Exception pE)
+    {
+      ex = pE;
+    }
+    finally
+    {
+      Set<Map.Entry<Object, Observable<?>>> entries = new HashSet<>(cache.entrySet());
+      for (Map.Entry<Object, Observable<?>> entry : entries)
       {
         cache.remove(entry.getKey());
       }
     }
 
-    if(ex != null)
+    if (ex != null)
       throw new RuntimeException("Failed to clear cache completely. All Entries have been removed, " +
                                      "but meanwhile an exception was thrown. See cause for more information", ex);
   }
