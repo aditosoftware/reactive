@@ -1,11 +1,16 @@
 package de.adito.util.reactive.cache;
 
+import io.reactivex.*;
 import io.reactivex.Observable;
 import io.reactivex.disposables.CompositeDisposable;
-import org.jetbrains.annotations.NotNull;
+import io.reactivex.functions.Function;
+import io.reactivex.subjects.BehaviorSubject;
+import org.jetbrains.annotations.*;
 
+import java.time.Duration;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 
 /**
@@ -15,7 +20,8 @@ import java.util.function.Supplier;
  */
 public class ObservableCache
 {
-
+  private static final int _CREATION_COOLDOwN_MS = 200;
+  private final Map<Object, Long> creationTimestamps = new ConcurrentHashMap<>();
   private final Map<Object, Observable<?>> cache = new ConcurrentHashMap<>();
   private final CompositeDisposable compositeDisposable = new CompositeDisposable();
 
@@ -32,9 +38,33 @@ public class ObservableCache
   public synchronized <T> Observable<T> calculate(@NotNull Object pIdentifier, @NotNull Supplier<Observable<T>> pObservable)
   {
     //noinspection unchecked We do not have a method to check generic-validity
-    return (Observable<T>) cache.computeIfAbsent(pIdentifier, pID -> pObservable.get()
+    return (Observable<T>) cache.computeIfAbsent(pIdentifier, pID -> _create(pID, pObservable, null)
         .replay(1)
         .autoConnect(0, compositeDisposable::add));
+  }
+
+  /**
+   * Factory-Method to create a new observable instance.
+   * If this method was called too often, it will throw an error.
+   *
+   * @param pObservableSupplier Supplier to get new observables
+   * @return Observable
+   */
+  @NotNull
+  private synchronized  <T> Observable<T> _create(@NotNull Object pIdentifier, @NotNull Supplier<Observable<T>> pObservableSupplier,
+                                                  @Nullable Throwable pException)
+  {
+    long current = System.currentTimeMillis();
+    Long previous = creationTimestamps.put(pIdentifier, current);
+
+    // Prevent this method from beeing called too often
+    if(pException != null && previous != null && (current - previous) < _CREATION_COOLDOwN_MS)
+      return Observable.error(new ObservableCacheRecursiveCreationException("An observable was prevented from beeing created too often, during " +
+                                                                                _CREATION_COOLDOwN_MS + "ms. An exception was thrown during creation",
+                                                                            pException));
+
+    return pObservableSupplier.get()
+        .onErrorResumeNext((Function<Throwable, ObservableSource<T>>) pEx -> _create(pIdentifier, pObservableSupplier, pEx));
   }
 
   /**
