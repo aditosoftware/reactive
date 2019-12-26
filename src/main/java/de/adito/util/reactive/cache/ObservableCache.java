@@ -1,16 +1,13 @@
 package de.adito.util.reactive.cache;
 
+import com.google.common.cache.*;
 import io.reactivex.*;
-import io.reactivex.Observable;
 import io.reactivex.disposables.CompositeDisposable;
 import io.reactivex.functions.Function;
-import io.reactivex.subjects.BehaviorSubject;
 import org.jetbrains.annotations.*;
 
-import java.time.Duration;
-import java.util.*;
+import java.util.Map;
 import java.util.concurrent.*;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 
 /**
@@ -22,7 +19,7 @@ public class ObservableCache
 {
   private static final int _CREATION_COOLDOwN_MS = 200;
   private final Map<Object, Long> creationTimestamps = new ConcurrentHashMap<>();
-  private final Map<Object, Observable<?>> cache = new ConcurrentHashMap<>();
+  private final Cache<Object, Observable<?>> cache = CacheBuilder.newBuilder().build();
   private final CompositeDisposable compositeDisposable = new CompositeDisposable();
 
   /**
@@ -37,10 +34,17 @@ public class ObservableCache
   @NotNull
   public synchronized <T> Observable<T> calculate(@NotNull Object pIdentifier, @NotNull Supplier<Observable<T>> pObservable)
   {
-    //noinspection unchecked We do not have a method to check generic-validity
-    return (Observable<T>) cache.computeIfAbsent(pIdentifier, pID -> _create(pID, pObservable, null)
-        .replay(1)
-        .autoConnect(0, compositeDisposable::add));
+    try
+    {
+      //noinspection unchecked We do not have a method to check generic-validity
+      return (Observable<T>) cache.get(pIdentifier, () -> _create(pIdentifier, pObservable, null)
+          .replay(1)
+          .autoConnect(0, compositeDisposable::add));
+    }
+    catch (ExecutionException e)
+    {
+      throw new RuntimeException("Failed to calculate cache value", e);
+    }
   }
 
   /**
@@ -76,18 +80,11 @@ public class ObservableCache
     try
     {
       compositeDisposable.clear();
+      cache.invalidateAll();
     }
     catch (Exception pE)
     {
       ex = pE;
-    }
-    finally
-    {
-      Set<Map.Entry<Object, Observable<?>>> entries = new HashSet<>(cache.entrySet());
-      for (Map.Entry<Object, Observable<?>> entry : entries)
-      {
-        cache.remove(entry.getKey());
-      }
     }
 
     if (ex != null)
