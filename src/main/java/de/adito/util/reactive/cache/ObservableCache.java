@@ -39,7 +39,7 @@ public class ObservableCache
       //noinspection unchecked We do not have a method to check generic-validity
       return (Observable<T>) cache.get(pIdentifier, () -> _create(pIdentifier, pObservable, null)
           .replay(1)
-          .autoConnect(0, compositeDisposable::add));
+          .autoConnect(1, compositeDisposable::add));
     }
     catch (ExecutionException e)
     {

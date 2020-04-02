@@ -21,11 +21,11 @@ public class Test_ObservableCache
   void test_calculate()
   {
     cache.calculate("test_calculate", () -> Observable.just(1, 2, 3));
-    cache.calculate("test_calculate", () -> Observable.just(1, 2, 3, 4, 5));
-    Observable<Integer> obs2 = cache.calculate("test_calculate", () -> Observable.just(1, 2, 3, 4));
+    cache.calculate("test_calculate", () -> Observable.just(2, 3, 4, 5));
+    Observable<Integer> obs2 = cache.calculate("test_calculate", () -> Observable.just(6, 2, 3, 4));
 
     Integer integer = obs2.blockingFirst();
-    Assertions.assertEquals(3, integer.intValue());
+    Assertions.assertEquals(1, integer.intValue());
   }
 
   @Test
