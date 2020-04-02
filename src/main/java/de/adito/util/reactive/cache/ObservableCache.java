@@ -38,6 +38,7 @@ public class ObservableCache
     {
       //noinspection unchecked We do not have a method to check generic-validity
       return (Observable<T>) cache.get(pIdentifier, () -> _create(pIdentifier, pObservable, null)
+          .serialize() // serialize it, because AbstractListenerObservables (for example) can fire new values async
           .replay(1)
           .autoConnect(1, compositeDisposable::add));
     }
