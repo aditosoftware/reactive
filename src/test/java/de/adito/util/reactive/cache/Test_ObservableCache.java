@@ -1,6 +1,6 @@
 package de.adito.util.reactive.cache;
 
-import io.reactivex.Observable;
+import io.reactivex.rxjava3.core.Observable;
 import org.junit.jupiter.api.*;
 
 /**

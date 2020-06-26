@@ -1,9 +1,9 @@
 package de.adito.util.reactive.cache;
 
 import com.google.common.cache.*;
-import io.reactivex.*;
-import io.reactivex.disposables.CompositeDisposable;
-import io.reactivex.functions.Function;
+import io.reactivex.rxjava3.core.*;
+import io.reactivex.rxjava3.disposables.CompositeDisposable;
+import io.reactivex.rxjava3.functions.Function;
 import org.jetbrains.annotations.*;
 
 import java.util.Map;

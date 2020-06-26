@@ -1,6 +1,6 @@
 package de.adito.util.reactive;
 
-import io.reactivex.*;
+import io.reactivex.rxjava3.core.*;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.function.Supplier;

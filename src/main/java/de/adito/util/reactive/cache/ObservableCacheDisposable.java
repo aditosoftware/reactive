@@ -1,6 +1,6 @@
 package de.adito.util.reactive.cache;
 
-import io.reactivex.disposables.Disposable;
+import io.reactivex.rxjava3.disposables.Disposable;
 import org.jetbrains.annotations.NotNull;
 
 import java.lang.ref.WeakReference;

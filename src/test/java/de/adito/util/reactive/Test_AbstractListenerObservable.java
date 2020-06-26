@@ -1,8 +1,8 @@
 package de.adito.util.reactive;
 
-import io.reactivex.Observable;
-import io.reactivex.disposables.Disposable;
-import io.reactivex.functions.Consumer;
+import io.reactivex.rxjava3.core.Observable;
+import io.reactivex.rxjava3.disposables.Disposable;
+import io.reactivex.rxjava3.functions.Consumer;
 import org.jetbrains.annotations.NotNull;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -45,7 +45,7 @@ public class Test_AbstractListenerObservable
   }
 
   @Test
-  void test_newValue() throws Exception
+  void test_newValue() throws Throwable
   {
     Consumer<String> subscriber = mock(Consumer.class);
     observable.subscribe(subscriber);
@@ -71,7 +71,7 @@ public class Test_AbstractListenerObservable
   }
 
   @Test
-  void test_multi_newValue() throws Exception
+  void test_multi_newValue() throws Throwable
   {
     Consumer<String> subscriber = mock(Consumer.class);
     Consumer<String> subscriber2 = mock(Consumer.class);
@@ -89,7 +89,7 @@ public class Test_AbstractListenerObservable
   }
 
   @Test
-  void test_multi_newValueAndDispose() throws Exception
+  void test_multi_newValueAndDispose() throws Throwable
   {
     Consumer<String> subscriber = mock(Consumer.class);
     Consumer<String> subscriber2 = mock(Consumer.class);

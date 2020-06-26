@@ -1,7 +1,7 @@
 package de.adito.util.reactive;
 
-import io.reactivex.*;
-import io.reactivex.disposables.*;
+import io.reactivex.rxjava3.core.*;
+import io.reactivex.rxjava3.disposables.Disposable;
 import org.jetbrains.annotations.NotNull;
 
 /**
