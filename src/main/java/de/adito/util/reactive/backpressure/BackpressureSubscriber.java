@@ -1,26 +1,26 @@
 package de.adito.util.reactive.backpressure;
 
-import io.reactivex.rxjava3.core.FlowableSubscriber;
 import io.reactivex.rxjava3.disposables.Disposable;
+import io.reactivex.rxjava3.exceptions.OnErrorNotImplementedException;
 import io.reactivex.rxjava3.functions.*;
-import io.reactivex.rxjava3.internal.functions.Functions;
-import io.reactivex.rxjava3.internal.subscriptions.SubscriptionHelper;
-import io.reactivex.rxjava3.internal.util.EndConsumerHelper;
 import io.reactivex.rxjava3.plugins.RxJavaPlugins;
-import org.reactivestreams.Subscription;
+import org.reactivestreams.*;
 
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * FlowableSubscriber that is able to apply backpressure.
- * Is based on io.reactivex.rxjava3.subscribers.DisposableSubscriber, but does not immediately request the max number of items.
+ * Is loosely based on io.reactivex.rxjava3.subscribers.DisposableSubscriber, but does not immediately request the max number of items.
  * Instead, only one item is requested at the start, and another one after each onNext call
  *
  * @author m.kaspera, 30.07.2020
  */
-public class BackpressureSubscriber<T> implements FlowableSubscriber<T>, Disposable
+public class BackpressureSubscriber<T> implements Disposable, Subscriber<T>
 {
   final AtomicReference<Subscription> upstream = new AtomicReference<>();
+  private static final Consumer<Throwable> ON_ERROR_DEFAULT = pThrowable -> RxJavaPlugins.onError(new OnErrorNotImplementedException(pThrowable));
+  private static final Action EMPTY_ACTION = () -> {
+  };
   private final Consumer<T> onNextFn;
   private final Consumer<Throwable> onErrorFn;
   private final Action onCompleteFn;
@@ -31,7 +31,7 @@ public class BackpressureSubscriber<T> implements FlowableSubscriber<T>, Disposa
   public BackpressureSubscriber(Consumer<T> pOnNext)
   {
     // if the user does not pass an error handling or complete function, use the default rxJava functions for these cases
-    this(pOnNext, Functions.ON_ERROR_MISSING, Functions.EMPTY_ACTION);
+    this(pOnNext, ON_ERROR_DEFAULT, EMPTY_ACTION);
   }
 
   /**
@@ -40,7 +40,7 @@ public class BackpressureSubscriber<T> implements FlowableSubscriber<T>, Disposa
    */
   public BackpressureSubscriber(Consumer<T> pOnNext, Consumer<Throwable> pOnError)
   {
-    this(pOnNext, pOnError, Functions.EMPTY_ACTION);
+    this(pOnNext, pOnError, EMPTY_ACTION);
   }
 
   /**
@@ -67,7 +67,7 @@ public class BackpressureSubscriber<T> implements FlowableSubscriber<T>, Disposa
     {
       onError(pThrowable);
     }
-    request(1);
+    upstream.get().request(1);
   }
 
   @Override
@@ -96,61 +96,26 @@ public class BackpressureSubscriber<T> implements FlowableSubscriber<T>, Disposa
     }
   }
 
-  // ------------------------------------------------------------------------------------------------------------------------------------------------
-  // -------------------------- original code from io.reactivex.rxjava3.subscribers.DisposableSubscriber --------------------------------------------
-  // ------------------------------------------------------------------------------------------------------------------------------------------------
-
-
   @Override
   public final void onSubscribe(Subscription s)
   {
-    if (EndConsumerHelper.setOnce(this.upstream, s, getClass()))
-    {
-      onStart();
-    }
-  }
-
-  /**
-   * Called once the single upstream {@link Subscription} is set via {@link #onSubscribe(Subscription)}.
-   */
-  protected void onStart()
-  {
+    // set the subscription as upstream and request the first item
+    upstream.set(s);
     upstream.get().request(1);
-  }
-
-  /**
-   * Requests the specified amount from the upstream if its {@link Subscription} is set via
-   * onSubscribe already.
-   * <p>Note that calling this method before a {@link Subscription} is set via {@link #onSubscribe(Subscription)}
-   * leads to {@link NullPointerException} and meant to be called from inside {@link #onStart()} or
-   * {@link #onNext(Object)}.
-   *
-   * @param n the request amount, positive
-   */
-  protected final void request(long n)
-  {
-    upstream.get().request(n);
-  }
-
-  /**
-   * Cancels the Subscription set via {@link #onSubscribe(Subscription)} or makes sure a
-   * {@link Subscription} set asynchronously (later) is cancelled immediately.
-   * <p>This method is thread-safe and can be exposed as a public API.
-   */
-  protected final void cancel()
-  {
-    dispose();
   }
 
   @Override
   public final boolean isDisposed()
   {
-    return upstream.get() == SubscriptionHelper.CANCELLED;
+    // if no subscription is available, the subscriber has been disposed
+    return upstream.get() == null;
   }
 
   @Override
   public final void dispose()
   {
-    SubscriptionHelper.cancel(upstream);
+    // cancel the subscription and set upstream to null
+    upstream.get().cancel();
+    upstream.set(null);
   }
 }
