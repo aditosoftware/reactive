@@ -6,7 +6,7 @@ import io.reactivex.rxjava3.functions.*;
 import io.reactivex.rxjava3.plugins.RxJavaPlugins;
 import org.reactivestreams.*;
 
-import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.atomic.*;
 
 /**
  * FlowableSubscriber that is able to apply backpressure.
@@ -17,13 +17,18 @@ import java.util.concurrent.atomic.AtomicReference;
  */
 public class BackpressureSubscriber<T> implements Disposable, Subscriber<T>
 {
-  final AtomicReference<Subscription> upstream = new AtomicReference<>();
+  private static final Integer DEFAULT_REQUESTS_INITIAL_SIZE = 256;
+  private static final Integer DEFAULT_REQUESTS_BATCH_SIZE = 64;
   private static final Consumer<Throwable> ON_ERROR_DEFAULT = pThrowable -> RxJavaPlugins.onError(new OnErrorNotImplementedException(pThrowable));
   private static final Action EMPTY_ACTION = () -> {
   };
+  private final AtomicReference<Subscription> upstream = new AtomicReference<>();
+  private final AtomicInteger counter = new AtomicInteger(0);
   private final Consumer<T> onNextFn;
   private final Consumer<Throwable> onErrorFn;
   private final Action onCompleteFn;
+  private final int requestInititalSize;
+  private final int requestBatchSize;
 
   /**
    * @param pOnNext the Consumer<T> you have designed to accept emissions from the ObservableSource
@@ -51,9 +56,24 @@ public class BackpressureSubscriber<T> implements Disposable, Subscriber<T>
   public BackpressureSubscriber(Consumer<T> pOnNext, Consumer<Throwable> pOnError, Action pOnComplete)
   {
 
+    this(pOnNext, pOnError, pOnComplete, DEFAULT_REQUESTS_INITIAL_SIZE, DEFAULT_REQUESTS_BATCH_SIZE);
+  }
+
+  /**
+   * @param pOnNext              the Consumer<T> you have designed to accept emissions from the ObservableSource
+   * @param pOnError             the Consumer<Throwable> you have designed to accept any error notification from the ObservableSource
+   * @param pOnComplete          the Action you have designed to accept a completion notification from the ObservableSource
+   * @param pRequestInititalSize Number of initial items that are requested for the backpressure mechanism
+   * @param pRequestBatchSize    Number, after which a new set of requests is requested (e.g. for 64, after 64 onNext calls 64 new items are requested)
+   */
+  private BackpressureSubscriber(Consumer<T> pOnNext, Consumer<Throwable> pOnError, Action pOnComplete,
+                                 int pRequestInititalSize, int pRequestBatchSize)
+  {
     onNextFn = pOnNext;
     onErrorFn = pOnError;
     onCompleteFn = pOnComplete;
+    requestInititalSize = pRequestInititalSize;
+    requestBatchSize = pRequestBatchSize;
   }
 
   @Override
@@ -67,7 +87,8 @@ public class BackpressureSubscriber<T> implements Disposable, Subscriber<T>
     {
       onError(pThrowable);
     }
-    upstream.get().request(1);
+    if (counter.incrementAndGet() % requestBatchSize == 0)
+      upstream.get().request(requestBatchSize);
   }
 
   @Override
@@ -101,7 +122,7 @@ public class BackpressureSubscriber<T> implements Disposable, Subscriber<T>
   {
     // set the subscription as upstream and request the first item
     upstream.set(s);
-    upstream.get().request(1);
+    upstream.get().request(requestInititalSize);
   }
 
   @Override
@@ -117,5 +138,79 @@ public class BackpressureSubscriber<T> implements Disposable, Subscriber<T>
     // cancel the subscription and set upstream to null
     upstream.get().cancel();
     upstream.set(null);
+  }
+
+  /**
+   * Builder for creating BackpressureSubscribersin a comfortable manner
+   * All the essential parameters have to be passed in the constructor, every other parameter uses a default value if it is not set explicitly
+   *
+   * @param <T> The kind of object that the BackpressureSubscriber will emit
+   */
+  public static class Builder<T>
+  {
+    private final Consumer<T> onNextFn;
+    private Consumer<Throwable> onErrorFn = ON_ERROR_DEFAULT;
+    private Action onCompleteFn = EMPTY_ACTION;
+    private int requestBatchSize = DEFAULT_REQUESTS_BATCH_SIZE;
+    private int requestInititalSize = DEFAULT_REQUESTS_INITIAL_SIZE;
+
+    public Builder(Consumer<T> pOnNextFn)
+    {
+      onNextFn = pOnNextFn;
+    }
+
+    /**
+     * Defaults to the "OnErrorNotImplementedException" being thrown by the RxJava Framework
+     *
+     * @param pErrorFn the Consumer<Throwable> you have designed to accept any error notification from the ObservableSource
+     * @return this builder
+     */
+    public Builder<T> setOnErrorFn(Consumer<Throwable> pErrorFn)
+    {
+      onErrorFn = pErrorFn;
+      return this;
+    }
+
+    /**
+     * @param pOnCompleteFn the Action you have designed to accept a completion notification from the ObservableSource
+     * @return this builder
+     */
+    public Builder<T> setOnCompleteFn(Action pOnCompleteFn)
+    {
+      onCompleteFn = pOnCompleteFn;
+      return this;
+    }
+
+    /**
+     *
+     * @param pInitialRequests Number of initial items that are requested for the backpressure mechanism
+     * @return this builder
+     */
+    public Builder<T> setInitialRequests(int pInitialRequests)
+    {
+      requestInititalSize = pInitialRequests;
+      return this;
+    }
+
+    /**
+     *
+     * @param pRequestBatchSize Number, after which a new set of requests is requested (e.g. for 64, after 64 onNext calls 64 new items are requested)
+     * @return this builder
+     */
+    public Builder<T> setRequestsBatchSize(int pRequestBatchSize)
+    {
+      requestBatchSize = pRequestBatchSize;
+      return this;
+    }
+
+    /**
+     * creates the BackpressureSubscriber with the paremeters set so far (all non-set parameters use their default values)
+     *
+     * @return the BackpressureSubscriber
+     */
+    public BackpressureSubscriber<T> create()
+    {
+      return new BackpressureSubscriber<>(onNextFn, onErrorFn, onCompleteFn, requestInititalSize, requestBatchSize);
+    }
   }
 }
