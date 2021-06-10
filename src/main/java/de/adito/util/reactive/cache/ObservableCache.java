@@ -8,6 +8,7 @@ import io.reactivex.rxjava3.disposables.Disposable;
 import io.reactivex.rxjava3.functions.Function;
 import org.jetbrains.annotations.*;
 
+import javax.annotation.concurrent.ThreadSafe;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.function.Supplier;
@@ -17,11 +18,12 @@ import java.util.function.Supplier;
  *
  * @author w.glanzer, 11.12.2018
  */
+@ThreadSafe
 public class ObservableCache
 {
   private static final int _CREATION_COOLDOwN_MS = 200;
   private final Map<Object, Long> creationTimestamps = new ConcurrentHashMap<>();
-  private final Multimap<Object, Disposable> disposableRegistry = ArrayListMultimap.create();
+  private final Multimap<Object, Disposable> disposableRegistry = Multimaps.synchronizedMultimap(ArrayListMultimap.create());
   private final Cache<Object, CacheValue<?>> cache;
 
   /**
@@ -66,7 +68,7 @@ public class ObservableCache
    * @return the cached observable
    */
   @NotNull
-  public synchronized <T> Observable<T> calculate(@NotNull Object pIdentifier, @NotNull Supplier<Observable<T>> pObservable)
+  public <T> Observable<T> calculate(@NotNull Object pIdentifier, @NotNull Supplier<Observable<T>> pObservable)
   {
     try
     {
@@ -95,7 +97,7 @@ public class ObservableCache
    * @return Observable
    */
   @NotNull
-  private synchronized <T> Observable<T> _create(@NotNull Object pIdentifier, @NotNull Supplier<Observable<T>> pObservableSupplier,
+  private <T> Observable<T> _create(@NotNull Object pIdentifier, @NotNull Supplier<Observable<T>> pObservableSupplier,
                                                  @Nullable Throwable pException)
   {
     long current = System.currentTimeMillis();
