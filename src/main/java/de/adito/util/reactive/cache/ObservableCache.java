@@ -21,7 +21,7 @@ import java.util.function.Supplier;
 @ThreadSafe
 public class ObservableCache
 {
-  private static final int _CREATION_COOLDOwN_MS = 200;
+  private static final int _CREATION_COOLDOWN_MS = 200;
   private final Map<Object, Long> creationTimestamps = new ConcurrentHashMap<>();
   private final Multimap<Object, Disposable> disposableRegistry = Multimaps.synchronizedMultimap(ArrayListMultimap.create());
   private final Cache<Object, CacheValue<?>> cache;
@@ -104,9 +104,9 @@ public class ObservableCache
     Long previous = creationTimestamps.put(pIdentifier, current);
 
     // Prevent this method from beeing called too often
-    if (pException != null && previous != null && (current - previous) < _CREATION_COOLDOwN_MS)
+    if (pException != null && previous != null && (current - previous) < _CREATION_COOLDOWN_MS)
       return Observable.error(new ObservableCacheRecursiveCreationException("An observable was prevented from beeing created too often, during " +
-                                                                                _CREATION_COOLDOwN_MS + "ms. An exception was thrown during creation",
+                                                                                _CREATION_COOLDOWN_MS + "ms. An exception was thrown during creation",
                                                                             pException));
 
     return pObservableSupplier.get()
