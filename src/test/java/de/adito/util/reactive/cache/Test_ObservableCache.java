@@ -96,4 +96,26 @@ public class Test_ObservableCache
     });
     Assertions.assertTrue(created.get());
   }
+
+  @Test
+  void test_calculation_initiallyBroken()
+  {
+    Exception value = new Exception();
+
+    // Create an observable that throws an error
+    Observable<Object> test = cache.calculate("test", () -> Observable.error(value));
+
+    try
+    {
+      // Try to get the value - this will correctly fail
+      //noinspection ResultOfMethodCallIgnored
+      test.blockingFirst();
+      Assertions.fail();
+    }
+    catch(Exception e)
+    {
+      // The cause of the catched exception should be our "real" value inside the observable
+      Assertions.assertEquals(value, e.getCause());
+    }
+  }
 }

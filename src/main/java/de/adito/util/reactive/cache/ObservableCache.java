@@ -6,7 +6,7 @@ import io.reactivex.rxjava3.core.Observable;
 import io.reactivex.rxjava3.core.*;
 import io.reactivex.rxjava3.disposables.Disposable;
 import io.reactivex.rxjava3.functions.Function;
-import org.jetbrains.annotations.*;
+import org.jetbrains.annotations.NotNull;
 
 import javax.annotation.concurrent.ThreadSafe;
 import java.util.*;
@@ -21,8 +21,33 @@ import java.util.function.Supplier;
 @ThreadSafe
 public class ObservableCache
 {
-  private static final int _CREATION_COOLDOWN_MS = 200;
-  private final Map<Object, Long> creationTimestamps = new ConcurrentHashMap<>();
+  private static final int _REQUESTS_TIMESLOT = 200;
+  private static final int _REQUESTS_MAX_PER_TIMESLOT = 30;
+
+  /* First of all we need a cache (the "underlying" cache) that contains all requests to a specific pIdentifier.
+   * This cache should expire all entries at a given amount of time after initial write.
+   * This cache gets wrapped with another cache, so that we are able to match the correct pIdentifier with the correct set of request times
+   * It is roughly comparable with a self-expiring multimap inside a cache */
+  private final LoadingCache<Object, LoadingCache<Object, Object>> requestCache = CacheBuilder.newBuilder()
+      .expireAfterAccess(_REQUESTS_TIMESLOT * 2L, TimeUnit.MILLISECONDS)
+      .removalListener((RemovalListener<Object, Cache<Object, Object>>) notification -> notification.getValue().invalidateAll())
+      .build(new CacheLoader<Object, LoadingCache<Object, Object>>()
+      {
+        @Override
+        public LoadingCache<Object, Object> load(@NotNull Object pCacheKey)
+        {
+          return CacheBuilder.newBuilder()
+              .expireAfterWrite(_REQUESTS_TIMESLOT, TimeUnit.MILLISECONDS)
+              .build(new CacheLoader<Object, Object>()
+              {
+                @Override
+                public Object load(@NotNull Object key)
+                {
+                  return key;
+                }
+              });
+        }
+      });
   private final Multimap<Object, Disposable> disposableRegistry = Multimaps.synchronizedMultimap(ArrayListMultimap.create());
   private final Cache<Object, CacheValue<?>> cache;
 
@@ -36,7 +61,7 @@ public class ObservableCache
   @NotNull
   public static ObservableCache createWithMaxUnsubscribedElements(long pMaxUnsubscribedElements)
   {
-    if(pMaxUnsubscribedElements <= 0)
+    if (pMaxUnsubscribedElements <= 0)
       throw new IllegalArgumentException("The amount of unsubscribed elements must be larger than 0, because every observable will be " +
                                              "unsubscribed at the beginning.");
 
@@ -73,7 +98,7 @@ public class ObservableCache
     try
     {
       //noinspection unchecked We do not have a method to check generic-validity
-      return (Observable<T>) cache.get(pIdentifier, () -> new CacheValue<>(_create(pIdentifier, pObservable, null)
+      return (Observable<T>) cache.get(pIdentifier, () -> new CacheValue<>(_createErrorHandled(pIdentifier, pObservable)
                                                                                // serialize it, because AbstractListenerObservables (for example)
                                                                                // can fire new values async
                                                                                .serialize()
@@ -91,26 +116,37 @@ public class ObservableCache
 
   /**
    * Factory-Method to create a new observable instance.
-   * If this method was called too often, it will throw an error.
+   * Cares about handling errors and recreation of the observable chain.
    *
    * @param pObservableSupplier Supplier to get new observables
    * @return Observable
    */
   @NotNull
-  private <T> Observable<T> _create(@NotNull Object pIdentifier, @NotNull Supplier<Observable<T>> pObservableSupplier,
-                                                 @Nullable Throwable pException)
+  private <T> Observable<T> _createErrorHandled(@NotNull Object pIdentifier, @NotNull Supplier<Observable<T>> pObservableSupplier)
   {
-    long current = System.currentTimeMillis();
-    Long previous = creationTimestamps.put(pIdentifier, current);
+    // retrieve a cache that contains all previous requests
+    LoadingCache<Object, Object> requests = requestCache.getUnchecked(pIdentifier);
 
-    // Prevent this method from beeing called too often
-    if (pException != null && previous != null && (current - previous) < _CREATION_COOLDOWN_MS)
-      return Observable.error(new ObservableCacheRecursiveCreationException("An observable was prevented from beeing created too often, during " +
-                                                                                _CREATION_COOLDOWN_MS + "ms. An exception was thrown during creation",
-                                                                            pException));
+    // insert a new request (with something unique - if an UUID is too slow, than change it to something faster)
+    requests.getUnchecked(UUID.randomUUID().toString());
+
+    // too many requests?
+    if (requests.size() >= _REQUESTS_MAX_PER_TIMESLOT)
+      throw new ObservableCacheRecursiveCreationException("An observable was prevented from beeing created too often " +
+                                                              "(max " + _REQUESTS_MAX_PER_TIMESLOT + " items), during " + _REQUESTS_TIMESLOT + "ms");
 
     return pObservableSupplier.get()
-        .onErrorResumeNext((Function<Throwable, ObservableSource<T>>) pEx -> _create(pIdentifier, pObservableSupplier, pEx));
+        .onErrorResumeNext((Function<Throwable, ObservableSource<T>>) pEx -> {
+          try
+          {
+            return _createErrorHandled(pIdentifier, pObservableSupplier);
+          }
+          catch (Exception e)
+          {
+            // Return the "original" error, because the current one is usually not as important as the original one (?)
+            return Observable.error(pEx);
+          }
+        });
   }
 
   /**
@@ -136,13 +172,13 @@ public class ObservableCache
     @Override
     public void onRemoval(@NotNull RemovalNotification<Object, CacheValue<?>> pNotification)
     {
-      if(pNotification.getCause() == RemovalCause.REPLACED)
+      if (pNotification.getCause() == RemovalCause.REPLACED)
         return;
 
       Collection<Disposable> removedDisposables = disposableRegistry.removeAll(pNotification.getKey());
-      if(removedDisposables != null)
+      if (removedDisposables != null)
         removedDisposables.forEach(pDisposable -> {
-          if(!pDisposable.isDisposed())
+          if (!pDisposable.isDisposed())
             pDisposable.dispose();
         });
     }

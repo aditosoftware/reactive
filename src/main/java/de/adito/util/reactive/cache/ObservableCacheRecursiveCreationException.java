@@ -5,12 +5,12 @@ package de.adito.util.reactive.cache;
  *
  * @author w.glanzer, 27.08.2019
  */
-public class ObservableCacheRecursiveCreationException extends Exception
+public class ObservableCacheRecursiveCreationException extends RuntimeException
 {
 
-  public ObservableCacheRecursiveCreationException(String message, Throwable cause)
+  public ObservableCacheRecursiveCreationException(String message)
   {
-    super(message, cause);
+    super(message);
   }
 
 }
