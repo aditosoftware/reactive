@@ -141,4 +141,18 @@ public class Test_ObservableCache
     Assertions.assertThrows(NoSuchElementException.class, cachedObservable::blockingFirst);
   }
 
+  @Test
+  void test_addObservableToCacheAfterDispose()
+  {
+    // add observable to cache - should return a new observable, a cached one
+    BehaviorSubject<String> cached = BehaviorSubject.create();
+    Assertions.assertNotEquals(cached, cache.calculateSequential("test", () -> cached));
+
+    // Dispose Cache
+    new ObservableCacheDisposable(cache).dispose();
+
+    // If we ask the cache to cache an observable after cache dispose, it should return its input, because the cache was already disposed.
+    BehaviorSubject<String> uncached = BehaviorSubject.create();
+    Assertions.assertEquals(uncached, cache.calculateSequential("testUncached", () -> uncached));
+  }
 }

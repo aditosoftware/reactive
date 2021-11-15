@@ -58,6 +58,7 @@ public class ObservableCache
   private final Cache<Object, CacheValue<?>> cache;
   private final Scheduler observeScheduler;
   private final Scheduler subscribeScheduler;
+  private final AtomicBoolean valid = new AtomicBoolean(true);
 
   /**
    * Creates an ObservableCache with a maximum number of "unsubscribed" elements.
@@ -203,6 +204,14 @@ public class ObservableCache
   {
     try
     {
+      if (!valid.get())
+      {
+        _LOGGER.log(Level.WARNING, "Calculating an observable inside an invalidated cache is not supported and " +
+            "may lead to memory leaks, because a cache never gets disposed twice. The returned observable is not cached.",
+                    new IllegalStateException());
+        return pObservable.get();
+      }
+
       //noinspection unchecked We do not have a method to check generic-validity
       return (Observable<T>) cache.get(pIdentifier, () -> {
         ReplaySubject<T> subject = ReplaySubject.createWithSize(1);
@@ -291,6 +300,10 @@ public class ObservableCache
     catch (Exception e)
     {
       throw new RuntimeException("Failed to clear observable cache completely. See cause for more information", e);
+    }
+    finally
+    {
+      valid.set(false);
     }
   }
 
