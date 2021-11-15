@@ -26,9 +26,9 @@ public class Test_ObservableCache
   @Test
   void test_calculate()
   {
-    cache.calculate("test_calculate", () -> Observable.just(1, 2, 3));
-    cache.calculate("test_calculate", () -> Observable.just(2, 3, 4, 5));
-    Observable<Integer> obs2 = cache.calculate("test_calculate", () -> Observable.just(6, 2, 3, 4));
+    cache.calculateSequential("test_calculate", () -> Observable.just(1, 2, 3));
+    cache.calculateSequential("test_calculate", () -> Observable.just(2, 3, 4, 5));
+    Observable<Integer> obs2 = cache.calculateSequential("test_calculate", () -> Observable.just(6, 2, 3, 4));
 
     Integer integer = obs2.blockingFirst();
     Assertions.assertEquals(3, integer.intValue());
@@ -38,7 +38,7 @@ public class Test_ObservableCache
   void test_calculate_concurrent()
   {
     //noinspection RedundantCast,unchecked,rawtypes
-    new Thread(() -> cache.calculate("id1", () -> (Observable) Observable.just(1, 2, 3)
+    new Thread(() -> cache.calculateSequential("id1", () -> (Observable) Observable.just(1, 2, 3)
         .map(pInt -> {
           Thread.sleep(500);
           return pInt;
@@ -52,7 +52,7 @@ public class Test_ObservableCache
       {
         // nothing
       }
-      cache.calculate("id1", () -> {
+      cache.calculateSequential("id1", () -> {
         Assertions.fail("The second observable must not be called, cause the other one was registered before");
         return Observable.empty();
       });
@@ -108,9 +108,9 @@ public class Test_ObservableCache
     ObservableCache cache = ObservableCache.createWithMaxUnsubscribedElements(3);
 
     // fill up cache
-    cache.calculate(1, () -> Observable.interval(100, TimeUnit.MILLISECONDS));
-    Observable<Long> valueToListenOn = cache.calculate("listened", () -> Observable.interval(100, TimeUnit.MILLISECONDS));
-    cache.calculate(3, () -> Observable.interval(100, TimeUnit.MILLISECONDS));
+    cache.calculateSequential(1, () -> Observable.interval(100, TimeUnit.MILLISECONDS));
+    Observable<Long> valueToListenOn = cache.calculateSequential("listened", () -> Observable.interval(100, TimeUnit.MILLISECONDS));
+    cache.calculateSequential(3, () -> Observable.interval(100, TimeUnit.MILLISECONDS));
 
     // listen to a value
     Disposable disposable = valueToListenOn.subscribe(pInt -> {
@@ -118,10 +118,10 @@ public class Test_ObservableCache
 
     // randomize cache
     for (int i = 0; i < 500; i++)
-      cache.calculate("random" + i, () -> Observable.interval(100, TimeUnit.MILLISECONDS));
+      cache.calculateSequential("random" + i, () -> Observable.interval(100, TimeUnit.MILLISECONDS));
 
     // evaluate, if evicted
-    cache.calculate("listened", () -> {
+    cache.calculateSequential("listened", () -> {
       Assertions.fail("Observable was evicted, even though there was a subscription to it");
       return Observable.empty();
     });
@@ -131,11 +131,11 @@ public class Test_ObservableCache
 
     // randomize cache
     for (int i = 0; i < 500; i++)
-      cache.calculate("random" + i, () -> Observable.interval(100, TimeUnit.MILLISECONDS));
+      cache.calculateSequential("random" + i, () -> Observable.interval(100, TimeUnit.MILLISECONDS));
 
     // evaluate now -> should be evicted, because of dispose above
     AtomicBoolean created = new AtomicBoolean(false);
-    cache.calculate("listened", () -> {
+    cache.calculateSequential("listened", () -> {
       created.set(true);
       return Observable.empty();
     });
@@ -148,7 +148,7 @@ public class Test_ObservableCache
     Exception value = new Exception();
 
     // Create an observable that throws an error
-    Observable<Object> test = cache.calculate("test", () -> Observable.error(value));
+    Observable<Object> test = cache.calculateSequential("test", () -> Observable.error(value));
 
     try
     {
