@@ -188,6 +188,14 @@ public class ObservableCache
   }
 
   /**
+   * @return the amount of currently cached observables
+   */
+  public long size()
+  {
+    return cache.size();
+  }
+
+  /**
    * Creates a new Entry in our Observable Cache.
    * If an Entry with pIdentifier was already created, the previous instance will be returned.
    * Otherwise the Supplier gets called and a new Observable will be created and shared with a ReplaySubject(!)
@@ -243,8 +251,11 @@ public class ObservableCache
           observable = observable.subscribeOn(pSubscribeScheduler);
 
         return new CacheValue<>(observable)
-            // re-evaluate the caches weigh of a value, if the subscription count changes
-            .doOnSubscriptionCountChange(pValue -> cache.put(pIdentifier, pValue));
+            // re-evaluate the caches weigh of a value, if the subscription count changes.
+            .doOnSubscriptionCountChange(pValue -> {
+              if(cache.getIfPresent(pIdentifier) != null)
+                cache.put(pIdentifier, pValue);
+            });
       }).getObservable();
     }
     catch (ExecutionException e)

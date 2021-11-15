@@ -71,9 +71,35 @@ public class Test_ObservableCache
     cachedInterval.subscribe().dispose();
     Assertions.assertFalse(intervalDisposed.get());
 
+    // "long living" disposable
+    Disposable disposable = cachedInterval.subscribe();
+
     // dispose underyling observable on ObservableCache dispose
     new ObservableCacheDisposable(cache).dispose();
     Assertions.assertTrue(intervalDisposed.get());
+    Assertions.assertTrue(disposable.isDisposed());
+  }
+
+  @Test
+  void test_changeSizeOnDispose()
+  {
+    Observable<Long> test = cache.calculateSequential("test", () -> Observable.interval(100, TimeUnit.MILLISECONDS));
+    Assertions.assertEquals(1, cache.size());
+
+    cache.calculateSequential("test2", () -> Observable.interval(100, TimeUnit.MILLISECONDS));
+    cache.calculateSequential("test3", () -> Observable.interval(100, TimeUnit.MILLISECONDS));
+    cache.calculateSequential("test4", () -> Observable.interval(100, TimeUnit.MILLISECONDS));
+    Assertions.assertEquals(4, cache.size());
+
+    test.subscribe();
+    Assertions.assertEquals(4, cache.size());
+
+    cache.calculateSequential("test", () -> Observable.interval(100, TimeUnit.MILLISECONDS));
+    cache.calculateSequential("test2", () -> Observable.interval(100, TimeUnit.MILLISECONDS));
+    Assertions.assertEquals(4, cache.size());
+
+    new ObservableCacheDisposable(cache).dispose();
+    Assertions.assertEquals(0, cache.size());
   }
 
   @Test
