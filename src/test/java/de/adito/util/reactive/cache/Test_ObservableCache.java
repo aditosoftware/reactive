@@ -60,6 +60,23 @@ public class Test_ObservableCache
   }
 
   @Test
+  void test_dispose()
+  {
+    AtomicBoolean intervalDisposed = new AtomicBoolean(false);
+    Observable<Long> interval = Observable.interval(100, TimeUnit.MILLISECONDS)
+        .doOnDispose(() -> intervalDisposed.set(true));
+    Observable<Long> cachedInterval = cache.calculateSequential("test", () -> interval);
+
+    // Do not dispose underlying observable on single subscription dispose
+    cachedInterval.subscribe().dispose();
+    Assertions.assertFalse(intervalDisposed.get());
+
+    // dispose underyling observable on ObservableCache dispose
+    new ObservableCacheDisposable(cache).dispose();
+    Assertions.assertTrue(intervalDisposed.get());
+  }
+
+  @Test
   void test_calculate_eviction_maxEntries()
   {
     ObservableCache cache = ObservableCache.createWithMaxUnsubscribedElements(3);
