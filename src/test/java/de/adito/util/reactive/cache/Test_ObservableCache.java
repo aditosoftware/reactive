@@ -2,8 +2,10 @@ package de.adito.util.reactive.cache;
 
 import io.reactivex.rxjava3.core.Observable;
 import io.reactivex.rxjava3.disposables.Disposable;
+import io.reactivex.rxjava3.subjects.BehaviorSubject;
 import org.junit.jupiter.api.*;
 
+import java.util.NoSuchElementException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -29,7 +31,7 @@ public class Test_ObservableCache
     Observable<Integer> obs2 = cache.calculate("test_calculate", () -> Observable.just(6, 2, 3, 4));
 
     Integer integer = obs2.blockingFirst();
-    Assertions.assertEquals(1, integer.intValue());
+    Assertions.assertEquals(3, integer.intValue());
   }
 
   @Test
@@ -63,17 +65,17 @@ public class Test_ObservableCache
     ObservableCache cache = ObservableCache.createWithMaxUnsubscribedElements(3);
 
     // fill up cache
-    cache.calculate(1, () -> Observable.timer(100, TimeUnit.MILLISECONDS));
-    Observable<Long> valueToListenOn = cache.calculate("listened", () -> Observable.timer(100, TimeUnit.MILLISECONDS));
-    cache.calculate(3, () -> Observable.timer(100, TimeUnit.MILLISECONDS));
+    cache.calculate(1, () -> Observable.interval(100, TimeUnit.MILLISECONDS));
+    Observable<Long> valueToListenOn = cache.calculate("listened", () -> Observable.interval(100, TimeUnit.MILLISECONDS));
+    cache.calculate(3, () -> Observable.interval(100, TimeUnit.MILLISECONDS));
 
     // listen to a value
     Disposable disposable = valueToListenOn.subscribe(pInt -> {
     });
 
     // randomize cache
-    for(int i = 0; i < 500; i++)
-      cache.calculate("random" + i, () -> Observable.timer(100, TimeUnit.MILLISECONDS));
+    for (int i = 0; i < 500; i++)
+      cache.calculate("random" + i, () -> Observable.interval(100, TimeUnit.MILLISECONDS));
 
     // evaluate, if evicted
     cache.calculate("listened", () -> {
@@ -85,8 +87,8 @@ public class Test_ObservableCache
     disposable.dispose();
 
     // randomize cache
-    for(int i = 0; i < 500; i++)
-      cache.calculate("random" + i, () -> Observable.timer(100, TimeUnit.MILLISECONDS));
+    for (int i = 0; i < 500; i++)
+      cache.calculate("random" + i, () -> Observable.interval(100, TimeUnit.MILLISECONDS));
 
     // evaluate now -> should be evicted, because of dispose above
     AtomicBoolean created = new AtomicBoolean(false);
@@ -112,10 +114,31 @@ public class Test_ObservableCache
       test.blockingFirst();
       Assertions.fail();
     }
-    catch(Exception e)
+    catch (Exception e)
     {
       // The cause of the catched exception should be our "real" value inside the observable
       Assertions.assertEquals(value, e.getCause());
     }
   }
+
+  @Test
+  void test_blockingFirstOnDisposedCache()
+  {
+    BehaviorSubject<String> subject = BehaviorSubject.create();
+    Observable<String> cachedObservable = cache.calculateSequential("test", () -> subject);
+    subject.onNext("first");
+    subject.onNext("second");
+
+    // Initial Value - observable should be cached, because of undisposed cache
+    Assertions.assertEquals("second", cachedObservable.blockingFirst());
+    Assertions.assertNotEquals(subject, cachedObservable);
+
+    // Dispose Cache
+    new ObservableCacheDisposable(cache).dispose();
+
+    // Now the returned observable of the cache should be completed and fail on blockingFirst, because it won't emit items anymore
+    //noinspection ResultOfMethodCallIgnored
+    Assertions.assertThrows(NoSuchElementException.class, cachedObservable::blockingFirst);
+  }
+
 }

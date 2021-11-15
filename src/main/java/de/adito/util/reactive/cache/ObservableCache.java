@@ -6,12 +6,16 @@ import io.reactivex.rxjava3.core.Observable;
 import io.reactivex.rxjava3.core.*;
 import io.reactivex.rxjava3.disposables.Disposable;
 import io.reactivex.rxjava3.functions.Function;
+import io.reactivex.rxjava3.subjects.ReplaySubject;
 import org.jetbrains.annotations.*;
 
 import javax.annotation.concurrent.ThreadSafe;
+import java.lang.reflect.*;
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
+import java.util.logging.*;
 
 /**
  * Cache to store RxJava Observables
@@ -23,6 +27,8 @@ public class ObservableCache
 {
   private static final int _REQUESTS_TIMESLOT = 200;
   private static final int _REQUESTS_MAX_PER_TIMESLOT = 30;
+  private static final Logger _LOGGER = Logger.getLogger(ObservableCache.class.getName());
+  private static Field _BUFFER_FIELD;
 
   /* First of all we need a cache (the "underlying" cache) that contains all requests to a specific pIdentifier.
    * This cache should expire all entries at a given amount of time after initial write.
@@ -199,10 +205,27 @@ public class ObservableCache
     {
       //noinspection unchecked We do not have a method to check generic-validity
       return (Observable<T>) cache.get(pIdentifier, () -> {
+        ReplaySubject<T> subject = ReplaySubject.createWithSize(1);
         Observable<T> observable = _createErrorHandled(pIdentifier, pObservable)
             .serialize()// serialize it, because AbstractListenerObservables (for example) can fire new values async
             .replay(1)
-            .autoConnect(1, pDis -> disposableRegistry.put(pIdentifier, pDis));
+            .autoConnect(1, pDis -> disposableRegistry.put(pIdentifier, pDis))
+            .subscribeWith(subject);
+        disposableRegistry.put(pIdentifier, new Disposable()
+        {
+          @Override
+          public void dispose()
+          {
+            subject.onComplete();
+            _trimSizeBoundBuffer(subject);
+          }
+
+          @Override
+          public boolean isDisposed()
+          {
+            return false;
+          }
+        });
 
         if (pObserveScheduler != null)
           observable = observable.observeOn(pObserveScheduler);
@@ -268,6 +291,35 @@ public class ObservableCache
     catch (Exception e)
     {
       throw new RuntimeException("Failed to clear observable cache completely. See cause for more information", e);
+    }
+  }
+
+  /**
+   * Trims the ReplaySubject, so that the current size and the max size of the buffer match each other.
+   * This method is used with a ReplaySubject with a buffer size of 1.
+   * The ReplaySubject should lose its value on completion.
+   *
+   * @param pSubject ReplaySubject to trim
+   */
+  private void _trimSizeBoundBuffer(@NotNull ReplaySubject<?> pSubject)
+  {
+    try
+    {
+      if (_BUFFER_FIELD == null)
+      {
+        _BUFFER_FIELD = ReplaySubject.class.getDeclaredField("buffer");
+        _BUFFER_FIELD.setAccessible(true);
+      }
+
+      Object bufferValue = _BUFFER_FIELD.get(pSubject);
+      Method trim = bufferValue.getClass().getDeclaredMethod("trim");
+      trim.setAccessible(true);
+      trim.invoke(bufferValue);
+    }
+    catch (Exception e)
+    {
+      throw new RuntimeException("Failed to trim replay subject buffer. " +
+                                     "This may lead to memory leaks because of replaying old values", e);
     }
   }
 
