@@ -214,9 +214,9 @@ public class ObservableCache
     {
       if (!valid.get())
       {
-        _LOGGER.log(Level.WARNING, "Calculating an observable inside an invalidated cache is not supported and " +
-            "may lead to memory leaks, because a cache never gets disposed twice. The returned observable is not cached.",
-                    new IllegalStateException());
+        _LOGGER.log(Level.WARNING, "", new IllegalStateException("Calculating an observable inside an invalidated cache is not supported and may " +
+                                                                     "lead to memory leaks, because a cache never gets disposed twice. " +
+                                                                     "The returned observable is not cached."));
         return pObservable.get();
       }
 
