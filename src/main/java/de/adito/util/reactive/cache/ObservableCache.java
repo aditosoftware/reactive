@@ -28,7 +28,7 @@ public class ObservableCache
   private static final int _REQUESTS_TIMESLOT = 200;
   private static final int _REQUESTS_MAX_PER_TIMESLOT = 30;
   private static final Logger _LOGGER = Logger.getLogger(ObservableCache.class.getName());
-  private static Field _BUFFER_FIELD;
+  private static final Field _BUFFER_FIELD;
 
   /* First of all we need a cache (the "underlying" cache) that contains all requests to a specific pIdentifier.
    * This cache should expire all entries at a given amount of time after initial write.
@@ -59,6 +59,19 @@ public class ObservableCache
   private final Scheduler observeScheduler;
   private final Scheduler subscribeScheduler;
   private final AtomicBoolean valid = new AtomicBoolean(true);
+
+  static
+  {
+    try
+    {
+      _BUFFER_FIELD = ReplaySubject.class.getDeclaredField("buffer");
+      _BUFFER_FIELD.setAccessible(true);
+    }
+    catch (NoSuchFieldException e)
+    {
+      throw new RuntimeException(e);
+    }
+  }
 
   /**
    * Creates an ObservableCache with a maximum number of "unsubscribed" elements.
@@ -329,12 +342,6 @@ public class ObservableCache
   {
     try
     {
-      if (_BUFFER_FIELD == null)
-      {
-        _BUFFER_FIELD = ReplaySubject.class.getDeclaredField("buffer");
-        _BUFFER_FIELD.setAccessible(true);
-      }
-
       Object bufferValue = _BUFFER_FIELD.get(pSubject);
       Method trim = bufferValue.getClass().getDeclaredMethod("trim");
       trim.setAccessible(true);
