@@ -227,9 +227,10 @@ public class ObservableCache
     {
       if (!valid.get())
       {
-        _LOGGER.log(Level.WARNING, "", new IllegalStateException("Calculating an observable inside an invalidated cache is not supported and may " +
-                                                                     "lead to memory leaks, because a cache never gets disposed twice. " +
-                                                                     "The returned observable is not cached."));
+        if(System.getProperty("adito.observable.cache.log") != null)
+          _LOGGER.log(Level.WARNING, "", new IllegalStateException("Calculating an observable inside an invalidated cache is not supported and may " +
+                                                                       "lead to memory leaks, because a cache never gets disposed twice. " +
+                                                                       "The returned observable is not cached."));
         return pObservable.get();
       }
 
