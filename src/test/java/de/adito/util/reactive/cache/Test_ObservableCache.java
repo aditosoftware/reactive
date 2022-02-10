@@ -1,13 +1,18 @@
 package de.adito.util.reactive.cache;
 
+import de.adito.util.reactive.AbstractListenerObservable;
 import io.reactivex.rxjava3.core.Observable;
 import io.reactivex.rxjava3.disposables.Disposable;
 import io.reactivex.rxjava3.subjects.BehaviorSubject;
+import org.jetbrains.annotations.NotNull;
 import org.junit.jupiter.api.*;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.NoSuchElementException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Supplier;
 
 /**
  * @author w.glanzer, 11.12.2018
@@ -162,6 +167,81 @@ public class Test_ObservableCache
       // The cause of the catched exception should be our "real" value inside the observable
       Assertions.assertEquals(value, e.getCause());
     }
+  }
+
+  @ParameterizedTest(name = "errorOnNext delay: {arguments} ms")
+  @ValueSource(ints = {0, 2, 5, 10, 100, 1000})
+  void test_calculation_errorOnNext(int pDelayMs)
+  {
+    // Create our own exception class
+    class MyException extends RuntimeException
+    {
+    }
+
+    BehaviorSubject<Integer> subject = BehaviorSubject.createDefault(0);
+    Supplier<Observable<Integer>> observableCreator = () -> subject
+        .switchMap(pInt -> {
+          if(pDelayMs > 0)
+            Thread.sleep(pDelayMs); //Slow
+          if (pInt == 3)
+            throw new MyException();
+          return Observable.just(pInt);
+        });
+
+    Observable<Integer> cached1 = cache.calculateSequential("test", observableCreator);
+    subject.onNext(1);
+    subject.onNext(2);
+    subject.onNext(3);
+
+    //noinspection ResultOfMethodCallIgnored
+    Assertions.assertThrows(MyException.class, cached1::blockingLast);
+    subject.onNext(0); // reset
+
+    Observable<Integer> cached2 = cache.calculateSequential("test", observableCreator);
+    Assertions.assertNotEquals(cached1, cached2);
+  }
+
+  @ParameterizedTest(name = "errorOnSubscribe delay: {arguments} ms")
+  @ValueSource(ints = {0, 2, 5, 10, 100, 1000})
+  void test_calculation_errorOnSubscribe(int pDelayMs)
+  {
+    // Create our own exception class
+    class MyException extends RuntimeException
+    {
+    }
+
+    Supplier<Observable<Integer>> observableCreator = () -> Observable.create(new AbstractListenerObservable<Object, Object, Integer>(new Object())
+        {
+          @NotNull
+          @Override
+          protected Object registerListener(@NotNull Object pListenableValue, @NotNull IFireable<Integer> pFireable)
+          {
+            try
+            {
+              if (pDelayMs > 0)
+                Thread.sleep(pDelayMs);
+            }
+            catch(Exception e)
+            {
+              // ignore
+            }
+
+            throw new MyException();
+          }
+
+          @Override
+          protected void removeListener(@NotNull Object pListenableValue, @NotNull Object pO)
+          {
+            // ignore
+          }
+        });
+
+    Observable<Integer> cached1 = cache.calculateSequential("test", observableCreator);
+
+    Assertions.assertThrows(MyException.class, cached1::blockingSubscribe);
+
+    Observable<Integer> cached2 = cache.calculateSequential("test", observableCreator);
+    Assertions.assertNotEquals(cached1, cached2);
   }
 
   @Test

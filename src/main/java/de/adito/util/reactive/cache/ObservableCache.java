@@ -5,7 +5,6 @@ import com.google.common.collect.*;
 import io.reactivex.rxjava3.core.Observable;
 import io.reactivex.rxjava3.core.*;
 import io.reactivex.rxjava3.disposables.Disposable;
-import io.reactivex.rxjava3.functions.Function;
 import io.reactivex.rxjava3.subjects.ReplaySubject;
 import org.jetbrains.annotations.*;
 
@@ -241,7 +240,8 @@ public class ObservableCache
             .serialize()// serialize it, because AbstractListenerObservables (for example) can fire new values async
             .replay(1)
             .autoConnect(1, pDis -> disposableRegistry.put(pIdentifier, pDis))
-            .subscribeWith(subject);
+            .subscribeWith(subject)
+            .doAfterTerminate(() -> cache.invalidate(pIdentifier)); // if terminated (because of an error or completed) invalidate the cached observable
         disposableRegistry.put(pIdentifier, new Disposable()
         {
           @Override
@@ -299,18 +299,7 @@ public class ObservableCache
       throw new ObservableCacheRecursiveCreationException("An observable was prevented from beeing created too often " +
                                                               "(max " + _REQUESTS_MAX_PER_TIMESLOT + " items), during " + _REQUESTS_TIMESLOT + "ms");
 
-    return pObservableSupplier.get()
-        .onErrorResumeNext((Function<Throwable, ObservableSource<T>>) pEx -> {
-          try
-          {
-            return _createErrorHandled(pIdentifier, pObservableSupplier);
-          }
-          catch (Exception e)
-          {
-            // Return the "original" error, because the current one is usually not as important as the original one (?)
-            return Observable.error(pEx);
-          }
-        });
+    return pObservableSupplier.get();
   }
 
   /**
