@@ -9,9 +9,9 @@ import org.junit.jupiter.api.*;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
-import java.util.NoSuchElementException;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.*;
 import java.util.function.Supplier;
 
 /**
@@ -181,7 +181,7 @@ public class Test_ObservableCache
     BehaviorSubject<Integer> subject = BehaviorSubject.createDefault(0);
     Supplier<Observable<Integer>> observableCreator = () -> subject
         .switchMap(pInt -> {
-          if(pDelayMs > 0)
+          if (pDelayMs > 0)
             Thread.sleep(pDelayMs); //Slow
           if (pInt == 3)
             throw new MyException();
@@ -211,30 +211,30 @@ public class Test_ObservableCache
     }
 
     Supplier<Observable<Integer>> observableCreator = () -> Observable.create(new AbstractListenerObservable<Object, Object, Integer>(new Object())
+    {
+      @NotNull
+      @Override
+      protected Object registerListener(@NotNull Object pListenableValue, @NotNull IFireable<Integer> pFireable)
+      {
+        try
         {
-          @NotNull
-          @Override
-          protected Object registerListener(@NotNull Object pListenableValue, @NotNull IFireable<Integer> pFireable)
-          {
-            try
-            {
-              if (pDelayMs > 0)
-                Thread.sleep(pDelayMs);
-            }
-            catch(Exception e)
-            {
-              // ignore
-            }
+          if (pDelayMs > 0)
+            Thread.sleep(pDelayMs);
+        }
+        catch (Exception e)
+        {
+          // ignore
+        }
 
-            throw new MyException();
-          }
+        throw new MyException();
+      }
 
-          @Override
-          protected void removeListener(@NotNull Object pListenableValue, @NotNull Object pO)
-          {
-            // ignore
-          }
-        });
+      @Override
+      protected void removeListener(@NotNull Object pListenableValue, @NotNull Object pO)
+      {
+        // ignore
+      }
+    });
 
     Observable<Integer> cached1 = cache.calculateSequential("test", observableCreator);
 
@@ -277,5 +277,67 @@ public class Test_ObservableCache
     // If we ask the cache to cache an observable after cache dispose, it should return its input, because the cache was already disposed.
     BehaviorSubject<String> uncached = BehaviorSubject.create();
     Assertions.assertEquals(uncached, cache.calculateSequential("testUncached", () -> uncached));
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"parallel", "sequential"})
+  void test_addObservableMultithreaded(String pType) throws Exception
+  {
+    AtomicBoolean waitObj = new AtomicBoolean(true);
+    AtomicInteger created = new AtomicInteger(0);
+    AtomicInteger result = new AtomicInteger(0);
+    int count = 100;
+
+    for (int i = 0; i < count; i++)
+    {
+      new Thread(() -> {
+        try
+        {
+          while (waitObj.get())
+          {
+            // wait until ready
+            synchronized (waitObj)
+            {
+              waitObj.wait();
+            }
+          }
+
+          Supplier<Observable<Optional<Integer>>> observableSupplier = () -> {
+            created.incrementAndGet();
+            return BehaviorSubject.createDefault(Optional.of(1));
+          };
+          Observable<Optional<Integer>> observable;
+
+          if (pType.equals("parallel"))
+            observable = cache.calculateParallel("multithreaded", observableSupplier);
+          else
+            observable = cache.calculateSequential("multithreaded", observableSupplier);
+
+          observable
+              .blockingFirst()
+              .ifPresent(result::addAndGet);
+        }
+        catch (Exception e)
+        {
+          // ignore
+        }
+      }).start();
+    }
+
+    // Await Thread creation
+    Thread.sleep(1000);
+
+    // trigger all waiting threads
+    synchronized (waitObj)
+    {
+      waitObj.set(false);
+      waitObj.notifyAll();
+    }
+
+    // await finish
+    Thread.sleep(2000);
+
+    Assertions.assertEquals(count, result.get());
+    Assertions.assertEquals(1, created.get());
   }
 }
