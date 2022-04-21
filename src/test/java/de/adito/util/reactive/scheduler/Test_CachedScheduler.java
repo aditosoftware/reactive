@@ -42,6 +42,7 @@ public class Test_CachedScheduler
                                                              .startWithItem(123)
                                                              .observeOn(scheduler)
                                                              .subscribeOn(scheduler)
+                                                             .throttleLatest(500, TimeUnit.MILLISECONDS)
                                                              .blockingFirst()));
 
     // await all threads ok
