@@ -40,7 +40,7 @@ public class CachedScheduler
     if(_INSTANCE == null)
     {
       ThreadPoolExecutor executor = new ThreadPoolExecutor(Runtime.getRuntime().availableProcessors(), _MAX_POOL_SIZE, 60, TimeUnit.SECONDS,
-                                                           new LinkedBlockingQueue<>());
+                                                           new SynchronousQueue<>());
       executor.allowCoreThreadTimeOut(true);
       executor.setThreadFactory(new ThreadFactoryBuilder()
                                     .setDaemon(true)

@@ -6,6 +6,7 @@ import io.reactivex.rxjava3.disposables.Disposable;
 import org.junit.jupiter.api.Test;
 
 import java.util.*;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -36,7 +37,7 @@ public class Test_CachedScheduler
       });
 
     // Schedule real work
-    for (int i = 0; i < 10; i++)
+    for (int i = 0; i < Runtime.getRuntime().availableProcessors(); i++)
       scheduler.scheduleDirect(() -> receivedObjects.add(Observable.create(emitter -> emitter.setDisposable(Disposable.empty()))
                                                              .startWithItem(123)
                                                              .observeOn(scheduler)
