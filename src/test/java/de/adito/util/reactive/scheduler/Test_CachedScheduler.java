@@ -49,7 +49,7 @@ public class Test_CachedScheduler
     Thread.sleep(5000);
 
     // check if all runnable fired
-    assertEquals(10, receivedObjects.size());
+    assertEquals(Runtime.getRuntime().availableProcessors(), receivedObjects.size());
     assertTrue(receivedObjects.stream().allMatch(pObj -> Objects.equals(123, pObj)), receivedObjects.toString());
   }
 
