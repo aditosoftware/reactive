@@ -2,7 +2,6 @@ package de.adito.util.reactive.cache;
 
 import com.google.common.cache.*;
 import com.google.common.collect.*;
-import io.reactivex.rxjava3.core.Observable;
 import io.reactivex.rxjava3.core.*;
 import io.reactivex.rxjava3.disposables.Disposable;
 import io.reactivex.rxjava3.subjects.ReplaySubject;
@@ -10,8 +9,8 @@ import org.jetbrains.annotations.*;
 
 import javax.annotation.concurrent.ThreadSafe;
 import java.lang.reflect.*;
-import java.util.*;
-import java.util.concurrent.*;
+import java.util.Collection;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
 import java.util.logging.*;
@@ -24,35 +23,9 @@ import java.util.logging.*;
 @ThreadSafe
 public class ObservableCache
 {
-  private static final int _REQUESTS_TIMESLOT = 200;
-  private static final int _REQUESTS_MAX_PER_TIMESLOT = 30;
   private static final Logger _LOGGER = Logger.getLogger(ObservableCache.class.getName());
   private static final Field _BUFFER_FIELD;
 
-  /* First of all we need a cache (the "underlying" cache) that contains all requests to a specific pIdentifier.
-   * This cache should expire all entries at a given amount of time after initial write.
-   * This cache gets wrapped with another cache, so that we are able to match the correct pIdentifier with the correct set of request times
-   * It is roughly comparable with a self-expiring multimap inside a cache */
-  private final LoadingCache<Object, LoadingCache<Object, Object>> requestCache = CacheBuilder.newBuilder()
-      .expireAfterAccess(_REQUESTS_TIMESLOT * 2L, TimeUnit.MILLISECONDS)
-      .removalListener((RemovalListener<Object, Cache<Object, Object>>) notification -> notification.getValue().invalidateAll())
-      .build(new CacheLoader<Object, LoadingCache<Object, Object>>()
-      {
-        @Override
-        public LoadingCache<Object, Object> load(@NotNull Object pCacheKey)
-        {
-          return CacheBuilder.newBuilder()
-              .expireAfterWrite(_REQUESTS_TIMESLOT, TimeUnit.MILLISECONDS)
-              .build(new CacheLoader<Object, Object>()
-              {
-                @Override
-                public Object load(@NotNull Object key)
-                {
-                  return key;
-                }
-              });
-        }
-      });
   private final Multimap<Object, Disposable> disposableRegistry = Multimaps.synchronizedMultimap(ArrayListMultimap.create());
   private final Cache<Object, CacheValue<?>> cache;
   private final Scheduler observeScheduler;
@@ -236,7 +209,7 @@ public class ObservableCache
       //noinspection unchecked We do not have a method to check generic-validity
       return (Observable<T>) cache.get(pIdentifier, () -> {
         ReplaySubject<T> subject = ReplaySubject.createWithSize(1);
-        Observable<T> observable = _createErrorHandled(pIdentifier, pObservable)
+        Observable<T> observable = pObservable.get()
             .serialize()// serialize it, because AbstractListenerObservables (for example) can fire new values async
             .replay(1)
             .autoConnect(1, pDis -> disposableRegistry.put(pIdentifier, pDis))
@@ -276,30 +249,6 @@ public class ObservableCache
     {
       throw new RuntimeException("Failed to calculate cache value", e);
     }
-  }
-
-  /**
-   * Factory-Method to create a new observable instance.
-   * Cares about handling errors and recreation of the observable chain.
-   *
-   * @param pObservableSupplier Supplier to get new observables
-   * @return Observable
-   */
-  @NotNull
-  private <T> Observable<T> _createErrorHandled(@NotNull Object pIdentifier, @NotNull Supplier<Observable<T>> pObservableSupplier)
-  {
-    // retrieve a cache that contains all previous requests
-    LoadingCache<Object, Object> requests = requestCache.getUnchecked(pIdentifier);
-
-    // insert a new request (with something unique - if an UUID is too slow, than change it to something faster)
-    requests.getUnchecked(UUID.randomUUID().toString());
-
-    // too many requests?
-    if (requests.size() >= _REQUESTS_MAX_PER_TIMESLOT)
-      throw new ObservableCacheRecursiveCreationException("An observable was prevented from beeing created too often " +
-                                                              "(max " + _REQUESTS_MAX_PER_TIMESLOT + " items), during " + _REQUESTS_TIMESLOT + "ms");
-
-    return pObservableSupplier.get();
   }
 
   /**
