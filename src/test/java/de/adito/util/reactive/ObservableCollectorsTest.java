@@ -10,7 +10,7 @@ import java.util.stream.Stream;
 /**
  * @author w.glanzer, 07.12.2018
  */
-public class Test_ObservableCollectors
+class ObservableCollectorsTest
 {
 
   @Test

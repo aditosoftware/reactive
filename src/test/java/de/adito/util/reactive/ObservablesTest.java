@@ -9,7 +9,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 /**
  * @author w.glanzer, 03.12.2018
  */
-public class Test_Observables
+class ObservablesTest
 {
 
   @Test

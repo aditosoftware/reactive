@@ -22,7 +22,7 @@ import static org.mockito.Mockito.*;
  */
 @SuppressWarnings({"ResultOfMethodCallIgnored", "unchecked"})
 @ExtendWith(MockitoExtension.class)
-public class Test_AbstractListenerObservable
+class AbstractListenerObservableTest
 {
 
   @Spy

@@ -13,7 +13,7 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * @author w.glanzer, 13.04.2022
  */
-public class Test_CachedScheduler
+class CachedSchedulerTest
 {
 
   private final Scheduler scheduler = CachedScheduler.getInstance();
