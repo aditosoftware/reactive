@@ -115,7 +115,7 @@
     <plugins>
       <plugin>
         <artifactId>maven-compiler-plugin</artifactId>
-        <version>3.2</version>
+        <version>3.11.0</version>
         <configuration>
           <source>1.8</source>
           <target>1.8</target>
@@ -124,9 +124,8 @@
 
       <plugin>
         <artifactId>maven-jar-plugin</artifactId>
-        <version>2.6</version>
+        <version>3.3.0</version>
         <configuration>
-          <useDefaultManifestFile>true</useDefaultManifestFile>
           <archive>
             <manifest>
               <useUniqueVersions>true</useUniqueVersions>
@@ -141,18 +140,13 @@
       <!-- UnitTests -->
       <plugin>
         <artifactId>maven-surefire-plugin</artifactId>
-        <version>2.19.1</version>
+        <version>3.1.2</version>
         <configuration>
           <includes>
             <include>**/Test_*.java</include>
           </includes>
         </configuration>
         <dependencies>
-          <dependency>
-            <groupId>org.junit.platform</groupId>
-            <artifactId>junit-platform-surefire-provider</artifactId>
-            <version>1.0.1</version>
-          </dependency>
           <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter-engine</artifactId>
@@ -163,13 +157,13 @@
 
       <plugin>
         <artifactId>maven-install-plugin</artifactId>
-        <version>2.5.2</version>
+        <version>3.1.1</version>
       </plugin>
 
       <plugin>
         <groupId>org.apache.felix</groupId>
         <artifactId>maven-bundle-plugin</artifactId>
-        <version>4.2.1</version>
+        <version>5.1.9</version>
         <extensions>true</extensions>
         <configuration>
           <instructions>
@@ -198,7 +192,7 @@
 
       <plugin>
         <artifactId>maven-source-plugin</artifactId>
-        <version>2.4</version>
+        <version>3.3.0</version>
         <executions>
           <execution>
             <id>attach-sources</id>
@@ -211,9 +205,9 @@
 
       <plugin>
         <artifactId>maven-javadoc-plugin</artifactId>
-        <version>2.10.3</version>
+        <version>3.5.0</version>
         <configuration>
-          <additionalparam>-Xdoclint:none</additionalparam>
+          <doclint>none</doclint>
         </configuration>
         <executions>
           <execution>
@@ -238,7 +232,7 @@
         <plugins>
           <plugin>
             <artifactId>maven-gpg-plugin</artifactId>
-            <version>1.6</version>
+            <version>3.1.0</version>
             <executions>
               <execution>
                 <id>sign-artifacts</id>
@@ -252,7 +246,7 @@
           <plugin>
             <groupId>org.sonatype.plugins</groupId>
             <artifactId>nexus-staging-maven-plugin</artifactId>
-            <version>1.6.5</version>
+            <version>1.6.13</version>
             <extensions>true</extensions>
             <configuration>
               <serverId>ossrh</serverId>
