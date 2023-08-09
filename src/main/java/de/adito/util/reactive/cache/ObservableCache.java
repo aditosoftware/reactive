@@ -199,7 +199,7 @@ public class ObservableCache
   {
     try
     {
-      // create a read lock so multiple calculate kann be run at once
+      // create a read lock so multiple calculate can be run at once
       cacheLock.readLock().lock();
       if (!valid.get())
       {
