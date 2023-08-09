@@ -12,6 +12,7 @@ import java.lang.reflect.*;
 import java.util.Collection;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.*;
 import java.util.function.Supplier;
 import java.util.logging.*;
 
@@ -31,6 +32,7 @@ public class ObservableCache
   private final Scheduler observeScheduler;
   private final Scheduler subscribeScheduler;
   private final AtomicBoolean valid = new AtomicBoolean(true);
+  private final ReadWriteLock cacheLock = new ReentrantReadWriteLock();
 
   static
   {
@@ -197,9 +199,11 @@ public class ObservableCache
   {
     try
     {
+      // create a read lock so multiple calculate kann be run at once
+      cacheLock.readLock().lock();
       if (!valid.get())
       {
-        if(System.getProperty("adito.observable.cache.log") != null)
+        if (System.getProperty("adito.observable.cache.log") != null)
           _LOGGER.log(Level.WARNING, "", new IllegalStateException("Calculating an observable inside an invalidated cache is not supported and may " +
                                                                        "lead to memory leaks, because a cache never gets disposed twice. " +
                                                                        "The returned observable is not cached."));
@@ -240,7 +244,7 @@ public class ObservableCache
         return new CacheValue<>(observable)
             // re-evaluate the caches weigh of a value, if the subscription count changes.
             .doOnSubscriptionCountChange(pValue -> {
-              if(cache.getIfPresent(pIdentifier) != null)
+              if (cache.getIfPresent(pIdentifier) != null)
                 cache.put(pIdentifier, pValue);
             });
       }).getObservable();
@@ -249,15 +253,21 @@ public class ObservableCache
     {
       throw new RuntimeException("Failed to calculate cache value", e);
     }
+    finally
+    {
+      cacheLock.readLock().unlock();
+    }
   }
 
   /**
    * Disposes all Subjects and clears the underlying cache
    */
-  public synchronized void invalidate()
+  public void invalidate()
   {
     try
     {
+      // get a write lock so only invalidate can be called, and it needs to wait for the read locks (_calculate)
+      cacheLock.writeLock().lock();
       cache.invalidateAll();
     }
     catch (Exception e)
@@ -267,6 +277,7 @@ public class ObservableCache
     finally
     {
       valid.set(false);
+      cacheLock.writeLock().unlock();
     }
   }
 

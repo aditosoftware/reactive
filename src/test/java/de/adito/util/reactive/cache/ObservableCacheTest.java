@@ -10,10 +10,13 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.*;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.*;
 import java.util.function.Supplier;
+import java.util.stream.IntStream;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
@@ -44,7 +47,8 @@ class ObservableCacheTest
     String someRandomValue = "a";
 
     List<String> groundTruth = new ArrayList<>();
-    for(int counter = 0; counter < 40; counter++) {
+    for (int counter = 0; counter < 40; counter++)
+    {
       groundTruth.add(someRandomValue);
     }
     groundTruth.add(testKey);
@@ -66,7 +70,7 @@ class ObservableCacheTest
   /**
    * Helper for creating a capped recursive observable
    *
-   * @param pCounter Counter, used to stop the recursive behaviour at some point, we do not want to provoke a stackoverflow
+   * @param pCounter            Counter, used to stop the recursive behaviour at some point, we do not want to provoke a stackoverflow
    * @param pObservableSupplier Supplies the observable used as initial value and onError case
    * @return Recursive Observable that creates itself anew each time it runs on an error (which it does after the initial value). Recursion is capped
    * at 40 total produced values
@@ -428,5 +432,38 @@ class ObservableCacheTest
 
     Assertions.assertEquals(count, result.get());
     Assertions.assertEquals(1, created.get());
+  }
+
+  /**
+   * Tests that an {@link ObservableCache} can not be invalidated while calculations are still running
+   */
+  @Test
+  void shouldNotInvalidateWhileCalculating() throws InterruptedException
+  {
+    int intendedRunCount = 500;
+    ExecutorService executor = Executors.newCachedThreadPool();
+    ObservableCache observableCache = new ObservableCache();
+    AtomicInteger executionCount = new AtomicInteger(0);
+    AtomicInteger startedCount = new AtomicInteger(0);
+
+    // create 500 calculate Parallel runners with 2 seconds sleeps
+    IntStream.range(0, intendedRunCount)
+        .mapToObj(i -> (Runnable) () -> {
+          startedCount.incrementAndGet();
+
+          observableCache.calculateParallel("testObservable" + i, () -> {
+            // wait 2 seconds so the Thread is still running when invalidate gets called
+            await().pollDelay(2, TimeUnit.SECONDS).until(() -> true);
+            executionCount.incrementAndGet();
+            return Observable.just(Optional.empty());
+          });
+        })
+        // run those calculateParallel
+        .forEach(executor::submit);
+
+    await().until(() -> startedCount.get() == intendedRunCount);
+
+    observableCache.invalidate();
+    assertThat(executionCount.intValue()).isEqualTo(intendedRunCount);
   }
 }
